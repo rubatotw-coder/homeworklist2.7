@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>週末家事進度管理 v2.7</title>
+    <title>週末家事進度管理 v2.9</title>
     <style>
         :root { --primary: #2c3e50; --accent: #3498db; --bg: #f8f9fa; --success: #27ae60; --gold: #f1c40f; }
         body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background-color: var(--bg); margin: 0; padding: 15px; color: #333; }
@@ -27,18 +27,18 @@
         button { flex: 1; padding: 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .btn-reset { background: #fee2e2; color: #dc2626; }
         .btn-print { background: var(--success); color: white; }
+        .custom-input { width: 90%; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header">
-        <h1>🏠 週末家事進度 v2.7</h1>
-        <div id="dateArea">選擇日期： <select id="weekSelect"></select></div>
+        <h1>🏠 週末家事進度 v2.9</h1>
+        <div>選擇日期： <select id="weekSelect"></select></div>
     </div>
 
-    <div id="taskList">
-        </div>
+    <div id="taskList"></div>
 
     <div class="stats-board">
         <div style="text-align:center; margin-bottom:15px; color:#bdc3c7;">🏆 戰績榜 (需勾選 + 選擇複核者)</div>
@@ -57,10 +57,9 @@
 </div>
 
 <script>
-    // 基礎設定
     const MEMBERS = ["", "爸爸", "媽媽", "云", "元"];
     const CHECKERS = ["", "爸爸", "媽媽"];
-    const STORAGE_KEY = 'family_chore_v27_final';
+    const STORAGE_KEY = 'family_chore_v29_stable';
 
     const BATH_ITEMS = [
         "乾燥區地板吸塵", "擦玻璃門水垢", "排水孔清理", "洗手檯物品整理及擦拭檯面",
@@ -71,14 +70,20 @@
         { title: "🕒 每日高頻任務 (可計次)", items: ["除濕機倒水", "洗碗、餐具收納", "洗/烘衣服", "冰箱剩菜處理"] },
         { title: "🗑️ 垃圾處理 (可計次)", items: ["倒一般垃圾", "資源回收", "廚餘處理"] },
         { title: "🚿 浴室清潔 (主臥)", items: [...BATH_ITEMS] },
-        { title: "🚿 浴室清潔 (客浴)", items: [...BATH_ITEMS] },
-        { title: "🤖 機器人維護", items: ["換水倒水", "清刷頭"] },
-        { title: "🪴 後陽台清潔", items: ["徹底吸地板", "擦檯面", "換紙箱", "洗地板"] },
-        { title: "🍳 廚房深度清潔", items: ["爐台油汙全部擦拭", "擦爐台前牆壁油汙", "擦抽油煙機油汙", "流理槽油黴+籃子清洗+水龍頭", "餐桌雜物+桌面油汙擦乾淨"] },
-        { title: "🧺 其他衣物", items: ["洗毛巾、擦手布", "洗襪子", "整理洗好襪子"] }
+        { title: "🚿 浴室清潔 (客衛)", items: [...BATH_ITEMS] },
+        { title: "🛠️ 家電維護項目", items: [
+            "掃地機：換水補水", "掃地機：清洗集水盤", "掃地機：清理刷頭毛髮", 
+            "吸塵器：清空集塵盒", "空氣清淨機：清洗濾網", "烘衣機：清理毛屑過濾網", 
+            "洗衣機：清洗過濾網"
+        ]},
+        { title: "📋 機動項目與其他", items: [
+            "擦拭冰箱內部清潔", "更換除濕盒水/補補充包", "補充衛生紙/廚房紙巾",
+            "其他自訂項目 A (可輸入名稱)", "其他自訂項目 B (可輸入名稱)"
+        ]},
+        { title: "🪴 陽台清潔", items: ["徹底吸地板", "擦檯面", "換紙箱", "洗地板"] },
+        { title: "🍳 廚房深度清潔", items: ["爐台全部擦拭", "擦爐台前牆壁油汙", "擦抽油煙機油汙", "流理槽油黴+籃子清洗+水龍頭", "餐桌雜物+桌面油汙擦乾淨"] }
     ];
 
-    // 初始化頁面
     window.onload = function() {
         initDatePicker();
         renderTasks();
@@ -87,7 +92,7 @@
     function initDatePicker() {
         const sel = document.getElementById('weekSelect');
         let d = new Date(2026, 3, 18); 
-        for(let i=0; i<15; i++) {
+        for(let i=0; i<20; i++) {
             let next = new Date(d); next.setDate(d.getDate() + 1);
             let dateStr = d.toISOString().split('T')[0];
             let opt = new Option(`${d.toLocaleDateString()} - ${next.toLocaleDateString()}`, dateStr);
@@ -116,16 +121,21 @@
 
             group.items.forEach((name, iIdx) => {
                 const key = `g${gIdx}-i${iIdx}`;
-                const instances = weekData[key] || [{ done: false, doer: "", chk: "" }];
+                const instances = weekData[key] || [{ done: false, doer: "", chk: "", customName: "" }];
 
                 instances.forEach((data, sIdx) => {
                     const rowId = `${key}-s${sIdx}`;
+                    const isCustom = name.includes("自訂項目");
+                    const displayName = isCustom ? 
+                        `<input type="text" class="custom-input" placeholder="${name}" id="name-${rowId}" value="${data.customName || ''}" onchange="autoSave()">` : 
+                        name;
+
                     tableHtml += `
                     <tr id="tr-${rowId}" class="${data.done ? 'completed' : ''}">
                         <td style="width:40px"><input type="checkbox" id="ck-${rowId}" ${data.done ? 'checked' : ''} onchange="autoSave()"></td>
                         <td class="task-text">
-                            ${name}${instances.length > 1 ? ` (${sIdx+1})` : ''}
-                            ${sIdx === 0 ? `<button class="btn-add" onclick="addNewInstance('${key}')">+ 新增</button>` : `<span class="btn-del" onclick="removeInstance('${key}', ${sIdx})">✕</span>`}
+                            ${displayName}${instances.length > 1 ? ` (${sIdx+1})` : ''}
+                            ${sIdx === 0 ? `<button class="btn-add" onclick="addNewInstance('${key}')">+ 加次</button>` : `<span class="btn-del" onclick="removeInstance('${key}', ${sIdx})">✕</span>`}
                         </td>
                         <td><select id="doer-${rowId}" onchange="autoSave()">${MEMBERS.map(m => `<option value="${m}" ${data.doer===m?'selected':''}>${m}</option>`).join('')}</select></td>
                         <td><select id="chk-${rowId}" onchange="autoSave()">${CHECKERS.map(c => `<option value="${c}" ${data.chk===c?'selected':''}>${c}</option>`).join('')}</select></td>
@@ -143,20 +153,24 @@
         const allData = getStorage();
         const weekData = {};
 
-        // 遍歷所有 row 收集資料
         document.querySelectorAll('tr[id^="tr-"]').forEach(tr => {
             const rowId = tr.id.replace('tr-', '');
             const [gInfo, sInfo] = rowId.split('-s');
             const sIdx = parseInt(sInfo);
 
-            const done = document.getElementById(`ck-${rowId}`).checked;
-            const doer = document.getElementById(`doer-${rowId}`).value;
-            const chk = document.getElementById(`chk-${rowId}`).value;
+            const ck = document.getElementById(`ck-${rowId}`);
+            const de = document.getElementById(`doer-${rowId}`);
+            const ch = document.getElementById(`chk-${rowId}`);
+            const na = document.getElementById(`name-${rowId}`);
 
             if(!weekData[gInfo]) weekData[gInfo] = [];
-            weekData[gInfo][sIdx] = { done, doer, chk };
-
-            if(done) tr.classList.add('completed'); else tr.classList.remove('completed');
+            weekData[gInfo][sIdx] = { 
+                done: ck.checked, 
+                doer: de.value, 
+                chk: ch.value, 
+                customName: na ? na.value : "" 
+            };
+            if(ck.checked) tr.classList.add('completed'); else tr.classList.remove('completed');
         });
 
         allData[week] = weekData;
@@ -169,7 +183,7 @@
         const week = document.getElementById('weekSelect').value;
         const allData = getStorage();
         if(!allData[week][key]) allData[week][key] = [];
-        allData[week][key].push({ done: false, doer: "", chk: "" });
+        allData[week][key].push({ done: false, doer: "", chk: "", customName: "" });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
         renderTasks();
     }
@@ -187,21 +201,21 @@
         const scores = { "爸爸": 0, "媽媽": 0, "云": 0, "元": 0 };
         document.querySelectorAll('tr[id^="tr-"]').forEach(tr => {
             const rowId = tr.id.replace('tr-', '');
-            const done = document.getElementById(`ck-${rowId}`).checked;
-            const doer = document.getElementById(`doer-${rowId}`).value;
-            const chk = document.getElementById(`chk-${rowId}`).value;
-            
-            if(done && chk !== "" && scores.hasOwnProperty(doer)) {
-                scores[doer]++;
+            const ck = document.getElementById(`ck-${rowId}`);
+            const de = document.getElementById(`doer-${rowId}`);
+            const ch = document.getElementById(`chk-${rowId}`);
+            if(ck && ck.checked && ch.value !== "" && scores.hasOwnProperty(de.value)) {
+                scores[de.value]++;
             }
         });
         for (let name in scores) {
-            document.getElementById(`score-${name}`).innerText = scores[name];
+            const el = document.getElementById(`score-${name}`);
+            if(el) el.innerText = scores[name];
         }
     }
 
     function resetAll() {
-        if(confirm('確定要清空本週進度嗎？')) {
+        if(confirm('確定要清空本週所有進度嗎？')) {
             const week = document.getElementById('weekSelect').value;
             const allData = getStorage();
             delete allData[week];
@@ -210,6 +224,5 @@
         }
     }
 </script>
-
 </body>
 </html>
